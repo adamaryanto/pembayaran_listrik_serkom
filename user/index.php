@@ -25,10 +25,13 @@ if ($pelanggan) {
         GROUP BY status
     ");
     while ($row = mysqli_fetch_assoc($tagihan)) {
-        if ($row['status'] === 'Belum Bayar') {
-            $total_tagihan = $row['jumlah'];
-        } elseif ($row['status'] === 'Lunas') {
-            $total_lunas = $row['jumlah'];
+        // Normalisasi status dari database (antisipasi huruf besar/kecil)
+        $statusDB = strtolower($row['status']);
+
+        if ($statusDB === 'belum bayar' || $statusDB === 'belum dibayar') {
+            $total_tagihan += $row['jumlah'];
+        } elseif ($statusDB === 'lunas') {
+            $total_lunas += $row['jumlah'];
         }
     }
 }
@@ -128,26 +131,71 @@ if ($pelanggan) {
             </div>
         </div>
 
-        <!--  Menu Aksi -->
+        <!-- Riwayat Tagihan Terakhir -->
         <div class="mt-10">
-            <ul role="list" class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                
-                <li class="col-span-1 bg-white rounded-lg shadow-lg overflow-hidden divide-y divide-gray-200">
-                    <a href="tagihan.php" class="block hover:bg-gray-50">
-                        <div class="p-6 flex items-center space-x-4">
-                            <div class="flex-shrink-0 p-3 bg-blue-100 rounded-full">
-                                <svg class="h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
-                                </svg>
-                            </div>
-                            <div>
-                                <p class="text-xl font-semibold text-gray-900">Lihat Tagihan</p>
-                                <p class="text-sm text-gray-500">Lihat detail dan status pembayaran Anda.</p>
-                            </div>
-                        </div>
-                    </a>
-                </li>
-            </ul>
+            <h2 class="text-xl font-bold text-gray-900 mb-4">Riwayat Tagihan Terakhir</h2>
+            <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bulan/Tahun</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                            <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        <?php
+                        // Ambil 5 tagihan terakhir
+                        $recent_bills = mysqli_query($conn, "
+                            SELECT tagihan.*, pemakaian.bulan, pemakaian.tahun 
+                            FROM tagihan 
+                            JOIN pemakaian ON tagihan.pemakaian_id = pemakaian.id
+                            WHERE pemakaian.pelanggan_id = '{$pelanggan['id']}'
+                            ORDER BY tagihan.id DESC
+                            LIMIT 5
+                        ");
+                        
+                        if (mysqli_num_rows($recent_bills) > 0):
+                            while ($bill = mysqli_fetch_assoc($recent_bills)):
+                                $status_bill = strtolower($bill['status']);
+                                $badge_color = ($status_bill === 'lunas') ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
+                        ?>
+                        <tr>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                <?= $bill['bulan'] ?> <?= $bill['tahun'] ?>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                Rp <?= number_format($bill['total_bayar']) ?>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full <?= $badge_color ?>">
+                                    <?= ucwords($status_bill) ?>
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                <?php if ($status_bill !== 'lunas'): ?>
+                                    <a href="bayar.php?id=<?= $bill['id'] ?>" class="text-blue-600 hover:text-blue-900">Bayar</a>
+                                <?php else: ?>
+                                    <span class="text-gray-400">Lunas</span>
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                        <?php endwhile; else: ?>
+                        <tr>
+                            <td colspan="4" class="px-6 py-4 text-center text-sm text-gray-500">Belum ada riwayat tagihan.</td>
+                        </tr>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+                <div class="bg-gray-50 px-4 py-4 sm:px-6">
+                    <div class="text-sm">
+                        <a href="tagihan.php" class="font-medium text-blue-600 hover:text-blue-500">
+                            Lihat semua tagihan <span aria-hidden="true">&rarr;</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <?php endif; ?>
